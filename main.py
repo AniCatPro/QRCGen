@@ -9,10 +9,12 @@ import tempfile
 import os
 from decimal import Decimal
 
+
 def generate_qr_code(url, file_path):
     """Создает QR-код и сохраняет его как изображение."""
     qr = qrcode.make(url)
     qr.save(file_path)
+
 
 def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
     """Добавляет QR-код в указанный PDF-файл и текст под QR-кодом с использованием шрифта GOST."""
@@ -34,7 +36,7 @@ def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
         c = canvas.Canvas(temp_pdf_path, pagesize=(width, height))
 
         # Установка размеров QR-кода
-        qr_width = qr_height = 0.8 * inch
+        qr_width = qr_height = 0.7 * inch
         qr_x = width - qr_width - inch  # Позиция по x
         qr_y = height - qr_height - inch  # Позиция по y
 
@@ -43,10 +45,16 @@ def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
         c.linkURL(url, (qr_x, qr_y, qr_x + qr_width, qr_y + qr_height), relative=0)
 
         # Рисуем текст под QR-кодом
-        text_x = qr_x
-        text_y = qr_y - 0.5 * inch - 10  # Позиция текста чуть ниже QR-кода
-        c.setFont("GOST", 8)  # Используем GOST для текста
-        c.drawString(text_x, text_y, "проверка актуальной версии")
+        text = "проверка версии"
+        c.setFont("GOST", 7)  # Используем GOST для текста
+        text_width = c.stringWidth(text, "GOST", 7)  # Измеряем ширину текста
+        text_x = qr_x + (qr_width - text_width) / 2  # Центрируем по x относительно QR-кода
+
+        # Расстояние между QR-кодом и текстом
+        space_below_qr = 0.005 * inch  # Например, 0.2 дюйма ниже QR-кода
+        text_y = qr_y - space_below_qr - 8  # Позиция текста ниже QR-кода. Высота шрифта 8
+
+        c.drawString(text_x, text_y, text)
 
         c.save()
 
@@ -58,6 +66,7 @@ def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
     # Сохранение результата
     with open(output_pdf, "wb") as f:
         writer.write(f)
+
 
 def main():
     # Ввод пути до PDF и ссылки
@@ -92,6 +101,7 @@ def main():
         temp_pdf_path = "qr_canvas.pdf"
         if os.path.isfile(temp_pdf_path):
             os.remove(temp_pdf_path)
+
 
 if __name__ == "__main__":
     main()
