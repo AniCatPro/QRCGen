@@ -7,6 +7,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 import tempfile
 import os
+from decimal import Decimal
 
 def generate_qr_code(url, file_path):
     """Создает QR-код и сохраняет его как изображение."""
@@ -19,32 +20,38 @@ def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
     writer = PdfWriter()
 
     # Создание временного PDF с QR-кодом и текстом
-    c = canvas.Canvas("qr_canvas.pdf", pagesize=letter)
+    temp_pdf_path = "qr_canvas.pdf"
 
-    # Регистрация шрифта Arial
+    # Регистрация шрифта
     pdfmetrics.registerFont(TTFont('GOST', 'GOST_A.TTF'))
 
-    qr_width = qr_height = 0.8 * inch
-    qr_x = letter[0] - qr_width - inch  # Позиция по x
-    qr_y = inch  # Позиция по y
-
-    # Рисуем QR-код на холсте
-    c.drawImage(qr_code_path, qr_x, qr_y, width=qr_width, height=qr_height)
-    c.linkURL(url, (qr_x, qr_y, qr_x + qr_width, qr_y + qr_height), relative=0)
-
-    # Рисуем текст под QR-кодом
-    text_x = qr_x
-    text_y = qr_y - 0.5 * inch - 1  # Позиция текста чуть ниже QR-кода
-    c.setFont("GOST", 8)  # Используем GOST для текста
-    c.drawString(text_x, text_y, "проверка актуальной версии")
-
-    c.save()
-
-    qr_page = PdfReader("qr_canvas.pdf").pages[0]
-
-    # Проход по страницам PDF и добавление QR-кода
     for page_num in range(len(reader.pages)):
         page = reader.pages[page_num]
+        width = float(page.mediabox.width)  # Преобразование в float
+        height = float(page.mediabox.height)  # Преобразование в float
+
+        # Создание холста для текущей страницы
+        c = canvas.Canvas(temp_pdf_path, pagesize=(width, height))
+
+        # Установка размеров QR-кода
+        qr_width = qr_height = 0.8 * inch
+        qr_x = width - qr_width - inch  # Позиция по x
+        qr_y = height - qr_height - inch  # Позиция по y
+
+        # Рисуем QR-код на холсте
+        c.drawImage(qr_code_path, qr_x, qr_y, width=qr_width, height=qr_height)
+        c.linkURL(url, (qr_x, qr_y, qr_x + qr_width, qr_y + qr_height), relative=0)
+
+        # Рисуем текст под QR-кодом
+        text_x = qr_x
+        text_y = qr_y - 0.5 * inch - 10  # Позиция текста чуть ниже QR-кода
+        c.setFont("GOST", 8)  # Используем GOST для текста
+        c.drawString(text_x, text_y, "проверка актуальной версии")
+
+        c.save()
+
+        # Добавление QR-кода и текста на страницу PDF
+        qr_page = PdfReader(temp_pdf_path).pages[0]
         page.merge_page(qr_page)
         writer.add_page(page)
 
@@ -55,7 +62,7 @@ def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
 def main():
     # Ввод пути до PDF и ссылки
     input_pdf = input("Введите путь до PDF-файла: ").strip()
-    url = input("Введите ссылку облачного хранилища: ").strip()
+    url = input("Введите ссылку на файл в облачном хранилище: ").strip()
 
     if not os.path.isfile(input_pdf):
         print(f"Ошибка: Файл {input_pdf} не существует.")
