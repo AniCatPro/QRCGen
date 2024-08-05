@@ -1,4 +1,5 @@
 import qrcode
+from PIL import Image
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -12,8 +13,50 @@ from decimal import Decimal
 
 def generate_qr_code(url, file_path):
     """Создает QR-код и сохраняет его как изображение."""
-    qr = qrcode.make(url)
-    qr.save(file_path)
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=1,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill='black', back_color='white')
+    img.save(file_path)
+
+
+def trim_image(img_path):
+    """Обрезает белые поля вокруг изображения QR-кода."""
+    with Image.open(img_path) as img:
+        img = img.convert("RGBA")
+        bbox = img.getbbox()
+        img_cropped = img.crop(bbox)
+        return img_cropped
+
+
+def save_trimmed_image(img, output_path):
+    """Сохраняет обрезанное изображение QR-кода."""
+    img.save(output_path)
+
+
+def get_qr_position(page_width, page_height):
+    """Определяет позицию QR-кода в зависимости от размеров страницы."""
+    # Установка размеров QR-кода
+    qr_width = qr_height = 0.7 * inch
+
+    if (Decimal(page_width) == Decimal(42.02) and Decimal(page_height) == Decimal(29.71)) or \
+            (Decimal(page_width) == Decimal(21.01) and Decimal(page_height) == Decimal(29.71)) or \
+            (Decimal(page_width) == Decimal(59.41) and Decimal(page_height) == Decimal(42.02)):
+        # Позиция QR-кода в левом верхнем углу
+        qr_x = 6  # Позиция по x
+        qr_y = page_height - qr_height - 25 # Позиция по y
+    else:
+        # Позиция QR-кода в левом верхнем углу для остальных страниц
+        qr_x = 6
+        qr_y = page_height - qr_height - 25
+
+    return qr_x, qr_y
 
 
 def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
@@ -35,24 +78,27 @@ def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
         # Создание холста для текущей страницы
         c = canvas.Canvas(temp_pdf_path, pagesize=(width, height))
 
-        # Установка размеров QR-кода
-        qr_width = qr_height = 0.7 * inch
-        qr_x = width - qr_width - inch  # Позиция по x
-        qr_y = height - qr_height - inch  # Позиция по y
+        # Обрезка белых полей вокруг QR-кода
+        cropped_qr_path = "cropped_qr.png"
+        trimmed_img = trim_image(qr_code_path)
+        save_trimmed_image(trimmed_img, cropped_qr_path)
+
+        # Определяем позицию QR-кода
+        qr_x, qr_y = get_qr_position(width, height)
 
         # Рисуем QR-код на холсте
-        c.drawImage(qr_code_path, qr_x, qr_y, width=qr_width, height=qr_height)
-        c.linkURL(url, (qr_x, qr_y, qr_x + qr_width, qr_y + qr_height), relative=0)
+        c.drawImage(cropped_qr_path, qr_x, qr_y, width=0.7 * inch, height=0.7 * inch)
+        c.linkURL(url, (qr_x, qr_y, qr_x + 0.7 * inch, qr_y + 0.7 * inch), relative=0)
 
         # Рисуем текст под QR-кодом
         text = "проверка версии"
         c.setFont("GOST", 7)  # Используем GOST для текста
         text_width = c.stringWidth(text, "GOST", 7)  # Измеряем ширину текста
-        text_x = qr_x + (qr_width - text_width) / 2  # Центрируем по x относительно QR-кода
+        text_x = qr_x + (0.7 * inch - text_width) / 2  # Центрируем по x относительно QR-кода
 
         # Расстояние между QR-кодом и текстом
-        space_below_qr = 0.005 * inch  # Например, 0.2 дюйма ниже QR-кода
-        text_y = qr_y - space_below_qr - 8  # Позиция текста ниже QR-кода. Высота шрифта 8
+        space_below_qr = 0.05 * inch  # Например, 0.05 дюйма ниже QR-кода
+        text_y = qr_y - space_below_qr - 7  # Позиция текста ниже QR-кода. Высота шрифта 7
 
         c.drawString(text_x, text_y, text)
 
@@ -101,6 +147,11 @@ def main():
         temp_pdf_path = "qr_canvas.pdf"
         if os.path.isfile(temp_pdf_path):
             os.remove(temp_pdf_path)
+
+        # Удаление временного обрезанного QR-кода
+        cropped_qr_path = "cropped_qr.png"
+        if os.path.isfile(cropped_qr_path):
+            os.remove(cropped_qr_path)
 
 
 if __name__ == "__main__":
