@@ -2,13 +2,14 @@ import qrcode
 from PIL import Image
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 import tempfile
 import os
 from decimal import Decimal
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
 
 def generate_qr_code(url, file_path):
@@ -42,19 +43,10 @@ def save_trimmed_image(img, output_path):
 
 def get_qr_position(page_width, page_height):
     """Определяет позицию QR-кода в зависимости от размеров страницы."""
-    # Установка размеров QR-кода
     qr_width = qr_height = 0.7 * inch
 
-    if (Decimal(page_width) == Decimal(42.02) and Decimal(page_height) == Decimal(29.71)) or \
-            (Decimal(page_width) == Decimal(21.01) and Decimal(page_height) == Decimal(29.71)) or \
-            (Decimal(page_width) == Decimal(59.41) and Decimal(page_height) == Decimal(42.02)):
-        # Позиция QR-кода в левом верхнем углу
-        qr_x = 6  # Позиция по x
-        qr_y = page_height - qr_height - 25 # Позиция по y
-    else:
-        # Позиция QR-кода в левом верхнем углу для остальных страниц
-        qr_x = 6
-        qr_y = page_height - qr_height - 25
+    qr_x = 6
+    qr_y = page_height - qr_height - 25
 
     return qr_x, qr_y
 
@@ -64,95 +56,120 @@ def add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url):
     reader = PdfReader(input_pdf)
     writer = PdfWriter()
 
-    # Создание временного PDF с QR-кодом и текстом
     temp_pdf_path = "qr_canvas.pdf"
 
-    # Регистрация шрифта
     pdfmetrics.registerFont(TTFont('GOST', 'GOST_A.TTF'))
 
     for page_num in range(len(reader.pages)):
         page = reader.pages[page_num]
-        width = float(page.mediabox.width)  # Преобразование в float
-        height = float(page.mediabox.height)  # Преобразование в float
+        width = float(page.mediabox.width)
+        height = float(page.mediabox.height)
 
-        # Создание холста для текущей страницы
         c = canvas.Canvas(temp_pdf_path, pagesize=(width, height))
 
-        # Обрезка белых полей вокруг QR-кода
         cropped_qr_path = "cropped_qr.png"
         trimmed_img = trim_image(qr_code_path)
         save_trimmed_image(trimmed_img, cropped_qr_path)
 
-        # Определяем позицию QR-кода
         qr_x, qr_y = get_qr_position(width, height)
-
-        # Рисуем QR-код на холсте
         c.drawImage(cropped_qr_path, qr_x, qr_y, width=0.7 * inch, height=0.7 * inch)
         c.linkURL(url, (qr_x, qr_y, qr_x + 0.7 * inch, qr_y + 0.7 * inch), relative=0)
 
-        # Рисуем текст под QR-кодом
         text = "проверка версии"
-        c.setFont("GOST", 7)  # Используем GOST для текста
-        text_width = c.stringWidth(text, "GOST", 7)  # Измеряем ширину текста
-        text_x = qr_x + (0.7 * inch - text_width) / 2  # Центрируем по x относительно QR-кода
-
-        # Расстояние между QR-кодом и текстом
-        space_below_qr = 0.05 * inch  # Например, 0.05 дюйма ниже QR-кода
-        text_y = qr_y - space_below_qr - 7  # Позиция текста ниже QR-кода. Высота шрифта 7
+        c.setFont("GOST", 7)
+        text_width = c.stringWidth(text, "GOST", 7)
+        text_x = qr_x + (0.7 * inch - text_width) / 2
+        space_below_qr = 0.05 * inch
+        text_y = qr_y - space_below_qr - 7
 
         c.drawString(text_x, text_y, text)
-
         c.save()
 
-        # Добавление QR-кода и текста на страницу PDF
         qr_page = PdfReader(temp_pdf_path).pages[0]
         page.merge_page(qr_page)
         writer.add_page(page)
 
-    # Сохранение результата
     with open(output_pdf, "wb") as f:
         writer.write(f)
 
 
-def main():
-    # Ввод пути до PDF и ссылки
-    input_pdf = input("Введите путь до PDF-файла: ").strip()
-    url = input("Введите ссылку на файл в облачном хранилище: ").strip()
-
+def process_pdf(input_pdf, url, output_folder):
     if not os.path.isfile(input_pdf):
-        print(f"Ошибка: Файл {input_pdf} не существует.")
+        messagebox.showerror("Ошибка", f"Файл {input_pdf} не существует.")
         return
 
-    # Генерация временного файла для QR-кода
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as qr_code_file:
         qr_code_path = qr_code_file.name
 
     try:
         generate_qr_code(url, qr_code_path)
 
-        # Определение имени выходного файла
-        file_name, file_extension = os.path.splitext(input_pdf)
-        output_pdf = f"{file_name}_with_qr{file_extension}"
+        file_name = os.path.basename(input_pdf)
+        file_name_without_ext, file_extension = os.path.splitext(file_name)
+        output_pdf = os.path.join(output_folder, f"{file_name_without_ext}_with_qr{file_extension}")
 
         add_qr_with_link_to_pdf(input_pdf, output_pdf, qr_code_path, url)
 
-        print(f"QR-код добавлен. Выходной файл: {output_pdf}")
+        messagebox.showinfo("Успех", f"QR-код добавлен. Выходной файл: {output_pdf}")
 
     finally:
-        # Удаление временного файла QR-кода
         if os.path.isfile(qr_code_path):
             os.remove(qr_code_path)
-
-        # Удаление временного PDF с QR-кодом
         temp_pdf_path = "qr_canvas.pdf"
         if os.path.isfile(temp_pdf_path):
             os.remove(temp_pdf_path)
-
-        # Удаление временного обрезанного QR-кода
         cropped_qr_path = "cropped_qr.png"
         if os.path.isfile(cropped_qr_path):
             os.remove(cropped_qr_path)
 
 
-if __name__ == "__main__":
-    main()
+def select_pdf():
+    file_path = filedialog.askopenfilename(filetypes=[("PDF файлы", "*.pdf")])
+    if file_path:
+        pdf_path_entry.delete(0, tk.END)
+        pdf_path_entry.insert(0, file_path)
+
+
+def select_output_folder():
+    folder_path = filedialog.askdirectory()
+    if folder_path:
+        output_folder_entry.delete(0, tk.END)
+        output_folder_entry.insert(0, folder_path)
+
+
+def on_submit():
+    input_pdf = pdf_path_entry.get()
+    url = url_entry.get()
+    output_folder = output_folder_entry.get()
+
+    if not input_pdf or not url or not output_folder:
+        messagebox.showerror("Ошибка", "Пожалуйста, заполните все поля.")
+        return
+
+    process_pdf(input_pdf, url, output_folder)
+
+
+# Создание GUI
+root = tk.Tk()
+root.title("Добавление QR-кода в PDF")
+
+frame = tk.Frame(root, padx=10, pady=10)
+frame.pack(fill=tk.BOTH, expand=True)
+
+tk.Label(frame, text="Путь к PDF-файлу:").grid(row=0, column=0, sticky=tk.W, pady=5)
+pdf_path_entry = tk.Entry(frame, width=50)
+pdf_path_entry.grid(row=0, column=1, pady=5)
+tk.Button(frame, text="Выбрать", command=select_pdf).grid(row=0, column=2, padx=5)
+
+tk.Label(frame, text="Ссылка:").grid(row=1, column=0, sticky=tk.W, pady=5)
+url_entry = tk.Entry(frame, width=50)
+url_entry.grid(row=1, column=1, pady=5)
+
+tk.Label(frame, text="Папка для сохранения:").grid(row=2, column=0, sticky=tk.W, pady=5)
+output_folder_entry = tk.Entry(frame, width=50)
+output_folder_entry.grid(row=2, column=1, pady=5)
+tk.Button(frame, text="Выбрать", command=select_output_folder).grid(row=2, column=2, padx=5)
+
+tk.Button(frame, text="Обработать", command=on_submit).grid(row=3, column=0, columnspan=3, pady=10)
+
+root.mainloop()
