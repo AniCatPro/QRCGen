@@ -12,7 +12,8 @@
 
 ## Как запустить
 
-1. Скачайте исполняемый файл `QRCGen.exe` из раздела [Releases](https://github.com/QRCGen/releases).
+0. Скачайте и установите шрифт [GOST_A.TTF](https://github.com/AniCatPro/QRCGen/blob/main/GOST_A.TTF);
+1. Скачайте исполняемый файл `QRCGen.exe` из раздела [Releases](https://github.com/QRCGen/releases);
 2. Запустите файл `QRCGen.exe`.
 
 ## Инструкция по использованию
